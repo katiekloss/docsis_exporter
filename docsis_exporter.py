@@ -5,22 +5,41 @@ import credentials
 from bs4 import BeautifulSoup
 import pyjsparser
 
+s = requests.Session()
+a = HTTPBasicAuth(credentials.username, credentials.password)
+
 def getHtml():
-    s = requests.Session()
     # initially call a random page to get the XSRF token, will return 401
     s.get('http://192.168.0.1/')
-
-    a = HTTPBasicAuth(credentials.username, credentials.password)
     r = s.get('http://192.168.0.1/DocsisStatus.htm', auth=a)
+    h = BeautifulSoup(r.content, 'html.parser')
 
-    return BeautifulSoup(r.content, 'html.parser')
+    f = h.find('form')
 
+    if 'name' not in f.attrs:
+        print('Forcing logout with ' + f['action'])
+        s.post('http://192.168.0.1' + f['action'], data={'yes':'','act':'yes'})
+
+        r = s.get('http://192.168.0.1/DocsisStatus.htm', auth=a)
+        h = BeautifulSoup(r.content, 'html.parser')
+        f = h.find('form')
+
+    assert 'name' in f.attrs
+    return h
 
 def go():
     html = getHtml()
-    script_tag = html.find_all('script', src=None)[0]
-    script = pyjsparser.parse(script_tag.text)['body']
-    initFunc = next(x for x in script if x['type'] == 'FunctionDeclaration' and x['id']['name'] == 'InitDsTableTagValue')
+
+    initFunc = None
+    for script_tag in html.find_all('script', src=None):
+        script = pyjsparser.parse(script_tag.text)['body']
+        functions = { x['id']['name']:x for x in script if x['type'] == 'FunctionDeclaration' }
+
+        if 'InitDsTableTagValue' in functions:
+            initFunc = functions['InitDsTableTagValue']
+            break
+
+    assert initFunc != None
 
     vals = initFunc['body']['body'][0]['declarations'][0]['init']['value'].split("|")
     channelCount = int(vals[0])
