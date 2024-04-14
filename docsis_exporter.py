@@ -1,53 +1,89 @@
 #!env/bin/python
-from requests.auth import HTTPBasicAuth
-import requests
-import credentials
-from bs4 import BeautifulSoup
 import pyjsparser
+import requests
+from bs4 import BeautifulSoup
+from requests.auth import HTTPBasicAuth
+from tabulate import tabulate
+
+import credentials
 
 s = requests.Session()
 a = HTTPBasicAuth(credentials.username, credentials.password)
 
+
 def getHtml():
     # initially call a random page to get the XSRF token, will return 401
-    s.get('http://192.168.0.1/')
-    r = s.get('http://192.168.0.1/DocsisStatus.htm', auth=a)
-    h = BeautifulSoup(r.content, 'html.parser')
+    s.get("http://192.168.0.1/")
+    r = s.get("http://192.168.0.1/DocsisStatus.htm", auth=a)
+    h = BeautifulSoup(r.content, "html.parser")
 
-    f = h.find('form')
+    f = h.find("form")
 
-    if 'name' not in f.attrs:
-        print('Forcing logout with ' + f['action'])
-        s.post('http://192.168.0.1' + f['action'], data={'yes':'','act':'yes'})
+    if "name" not in f.attrs:
+        print("Forcing logout with " + f["action"])
+        s.post("http://192.168.0.1" + f["action"], data={"yes": "", "act": "yes"})
 
-        r = s.get('http://192.168.0.1/DocsisStatus.htm', auth=a)
-        h = BeautifulSoup(r.content, 'html.parser')
-        f = h.find('form')
+        r = s.get("http://192.168.0.1/DocsisStatus.htm", auth=a)
+        h = BeautifulSoup(r.content, "html.parser")
+        f = h.find("form")
 
-    assert 'name' in f.attrs
+    assert "name" in f.attrs
     return h
+
 
 def go():
     html = getHtml()
 
     initFunc = None
-    for script_tag in html.find_all('script', src=None):
-        script = pyjsparser.parse(script_tag.text)['body']
-        functions = { x['id']['name']:x for x in script if x['type'] == 'FunctionDeclaration' }
+    functions = {}
+    for script_tag in html.find_all("script", src=None):
+        script = pyjsparser.parse(script_tag.text)["body"]
+        functions.update({
+            x["id"]["name"]: x for x in script if x["type"] == "FunctionDeclaration"
+        })
 
-        if 'InitDsTableTagValue' in functions:
-            initFunc = functions['InitDsTableTagValue']
-            break
+    assert "InitDsTableTagValue" in functions
+    assert "InitUsTableTagValue" in functions
 
-    assert initFunc != None
-
-    vals = initFunc['body']['body'][0]['declarations'][0]['init']['value'].split("|")
+    vals = functions["InitDsTableTagValue"]["body"]["body"][0]["declarations"][0]["init"]["value"].split("|")
     channelCount = int(vals[0])
-    channels = list()
-    properties = ['index','status','modulation','id','frequency','power','snr','correctables','uncorrectables']
+    ds_channels = list()
+    properties = [
+        "index",
+        "status",
+        "modulation",
+        "id",
+        "frequency",
+        "power",
+        "snr",
+        "correctables",
+        "uncorrectables",
+    ]
     for i in range(channelCount):
-        channels.append(dict(zip(properties, [vals[j] for j in range(len(properties))])))
-    print(channels)
+        ds_channels.append(
+            dict(zip(properties, [vals[j + 1] for j in range(len(properties) * i, len(properties) * i + len(properties))]))
+        )
+
+    vals = functions["InitUsTableTagValue"]["body"]["body"][0]["declarations"][0]["init"]["value"].split("|")
+    channelCount = int(vals[0])
+    us_channels = list()
+    properties = [
+        "index",
+        "status",
+        "type",
+        "id",
+        "rate",
+        "frequency",
+        "power"
+    ]
+    for i in range(channelCount):
+        us_channels.append(
+            dict(zip(properties, [vals[j + 1] for j in range(len(properties) * i, len(properties) * i + len(properties))]))
+        )
+
+    print(tabulate(us_channels, headers="keys"))
+    print(tabulate(ds_channels, headers="keys"))
+
 
 if __name__ == "__main__":
     go()
