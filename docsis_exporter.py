@@ -8,7 +8,7 @@ from tabulate import tabulate
 import credentials
 
 s = requests.Session()
-a = HTTPBasicAuth(credentials.username, credentials.password)
+a = HTTPBasicAuth(credentials.USERNAME, credentials.PASSWORD)
 
 
 def getHtml():
