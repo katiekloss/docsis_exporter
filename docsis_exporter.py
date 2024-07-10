@@ -1,4 +1,7 @@
 #!env/bin/python
+
+"""Exports Netgear C3000 telemetry as a Prometheus exporter"""
+
 import pyjsparser
 import requests
 from bs4 import BeautifulSoup
@@ -11,7 +14,7 @@ s = requests.Session()
 a = HTTPBasicAuth(credentials.USERNAME, credentials.PASSWORD)
 
 
-def getHtml():
+def get_html():
     # initially call a random page to get the XSRF token, will return 401
     s.get("http://192.168.0.1/")
     r = s.get("http://192.168.0.1/DocsisStatus.htm", auth=a)
@@ -32,9 +35,8 @@ def getHtml():
 
 
 def go():
-    html = getHtml()
+    html = get_html()
 
-    initFunc = None
     functions = {}
     for script_tag in html.find_all("script", src=None):
         script = pyjsparser.parse(script_tag.text)["body"]
@@ -46,8 +48,8 @@ def go():
     assert "InitUsTableTagValue" in functions
 
     vals = functions["InitDsTableTagValue"]["body"]["body"][0]["declarations"][0]["init"]["value"].split("|")
-    channelCount = int(vals[0])
-    ds_channels = list()
+    channel_count = int(vals[0])
+    ds_channels = []
     properties = [
         "index",
         "status",
@@ -59,14 +61,14 @@ def go():
         "correctables",
         "uncorrectables",
     ]
-    for i in range(channelCount):
+    for i in range(channel_count):
         ds_channels.append(
             dict(zip(properties, [vals[j + 1] for j in range(len(properties) * i, len(properties) * i + len(properties))]))
         )
 
     vals = functions["InitUsTableTagValue"]["body"]["body"][0]["declarations"][0]["init"]["value"].split("|")
-    channelCount = int(vals[0])
-    us_channels = list()
+    channel_count = int(vals[0])
+    us_channels = []
     properties = [
         "index",
         "status",
@@ -76,7 +78,7 @@ def go():
         "frequency",
         "power"
     ]
-    for i in range(channelCount):
+    for i in range(channel_count):
         us_channels.append(
             dict(zip(properties, [vals[j + 1] for j in range(len(properties) * i, len(properties) * i + len(properties))]))
         )

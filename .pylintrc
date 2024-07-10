@@ -1,0 +1,5 @@
+[Main]
+max-line-length = 160
+
+[Basic]
+no-docstring-rgx = .*
