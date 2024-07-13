@@ -16,8 +16,12 @@ a = HTTPBasicAuth(credentials.USERNAME, credentials.PASSWORD)
 
 def get_html():
     # initially call a random page to get the XSRF token, will return 401
-    s.get("http://192.168.0.1/")
+    r = s.get("http://192.168.0.1/")
+    assert r.status_code == 401
+
     r = s.get("http://192.168.0.1/DocsisStatus.htm", auth=a)
+    r.raise_for_status()
+
     h = BeautifulSoup(r.content, "html.parser")
 
     f = h.find("form")
@@ -27,6 +31,8 @@ def get_html():
         s.post("http://192.168.0.1" + f["action"], data={"yes": "", "act": "yes"})
 
         r = s.get("http://192.168.0.1/DocsisStatus.htm", auth=a)
+        r.raise_for_status()
+
         h = BeautifulSoup(r.content, "html.parser")
         f = h.find("form")
 
