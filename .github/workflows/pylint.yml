@@ -12,7 +12,8 @@ jobs:
     - uses: actions/cache@v4
       with:
         path: ~/.cache/pylint
-        key: pylint-${{ github.ref_name }}
+        key: pylint-${{ github.sha }}
+        restore-keys: pylint-
 
     - uses: actions/cache@v4
       with:
