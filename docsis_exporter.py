@@ -68,9 +68,14 @@ def go():
         "uncorrectables",
     ]
     for i in range(channel_count):
-        ds_channels.append(
-            dict(zip(properties, [vals[j + 1] for j in range(len(properties) * i, len(properties) * i + len(properties))]))
-        )
+        channel_properties = dict(zip(properties, [vals[j + 1] for j in range(len(properties) * i, len(properties) * i + len(properties))]))
+        channel_properties["frequency"] = int(channel_properties["frequency"].split(" ")[0])
+        channel_properties["power"] = float(channel_properties["power"].split(" ")[0])
+        channel_properties["snr"] = float(channel_properties["snr"].split(" ")[0])
+        channel_properties["correctables"] = int(channel_properties["correctables"])
+        channel_properties["uncorrectables"] = int(channel_properties["uncorrectables"])
+
+        ds_channels.append(channel_properties)
 
     vals = functions["InitUsTableTagValue"]["body"]["body"][0]["declarations"][0]["init"]["value"].split("|")
     channel_count = int(vals[0])
