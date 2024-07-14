@@ -6,15 +6,17 @@ import pyjsparser
 import requests
 from bs4 import BeautifulSoup
 from requests.auth import HTTPBasicAuth
+from prometheus_client import start_http_server
+from prometheus_client.core import CounterMetricFamily, GaugeMetricFamily, REGISTRY
+from prometheus_client.registry import Collector
 from tabulate import tabulate
 
 import credentials
 
-s = requests.Session()
-a = HTTPBasicAuth(credentials.USERNAME, credentials.PASSWORD)
-
-
 def get_html():
+    s = requests.Session()
+    a = HTTPBasicAuth(credentials.USERNAME, credentials.PASSWORD)
+
     # initially call a random page to get the XSRF token, will return 401
     r = s.get("http://192.168.0.1/")
     assert r.status_code == 401
@@ -39,8 +41,7 @@ def get_html():
     assert "name" in f.attrs
     return h
 
-
-def go():
+def get_metrics():
     html = get_html()
 
     functions = {}
@@ -94,9 +95,39 @@ def go():
             dict(zip(properties, [vals[j + 1] for j in range(len(properties) * i, len(properties) * i + len(properties))]))
         )
 
+    return us_channels, ds_channels
+
+def go():
+    us_channels, ds_channels = get_metrics()
     print(tabulate(us_channels, headers="keys"))
     print(tabulate(ds_channels, headers="keys"))
 
+class DocsisCollector(Collector): # pylint: disable=too-few-public-methods
+    def collect(self):
+
+        _, down = get_metrics()
+
+        correctable_counter = CounterMetricFamily('downstream_correctable', 'Correctable downstream errors', labels=['channel_id', 'frequency'])
+        uncorrectable_counter = CounterMetricFamily('downstream_uncorrectable', 'Uncorrectable downstream errors', labels=['channel_id', 'frequency'])
+        snr_gauge = GaugeMetricFamily('downstream_snr', 'Downstream signal-to-noise ratio', labels=['channel_id', 'frequency'])
+        down_power_gauge = GaugeMetricFamily('downstream_power', 'Downstream power (dBmV)', labels=['channel_id', 'frequency'])
+
+        for channel in down:
+            id_frequency_labels = [channel['id'], str(channel['frequency'])]
+
+            correctable_counter.add_metric(id_frequency_labels, channel['correctables'])
+            uncorrectable_counter.add_metric(id_frequency_labels, channel['uncorrectables'])
+
+            snr_gauge.add_metric(id_frequency_labels, channel['snr'])
+
+            down_power_gauge.add_metric(id_frequency_labels, channel['power'])
+
+        yield correctable_counter
+        yield uncorrectable_counter
+        yield snr_gauge
+        yield down_power_gauge
 
 if __name__ == "__main__":
-    go()
+    REGISTRY.register(DocsisCollector())
+    _, t = start_http_server(8000)
+    t.join()
